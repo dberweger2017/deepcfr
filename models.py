@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import copy
 
 class PokerNet(nn.Module):
     def __init__(self, input_dim=54, output_dim=5):
@@ -26,3 +27,9 @@ class CFRNetwork:
     def __init__(self, device):
         self.net = PokerNet().to(device)
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=1e-4)
+        self.target_net = copy.deepcopy(self.net)  # For rolling average opponent updates
+
+    def update_target(self, tau=0.001):
+        # Soft update: target_net = tau * net + (1 - tau) * target_net
+        for target_param, param in zip(self.target_net.parameters(), self.net.parameters()):
+            target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
