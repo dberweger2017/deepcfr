@@ -10,14 +10,14 @@ from collections import defaultdict, deque
 from torch.utils.tensorboard import SummaryWriter
 from game_env import PokerEnv, HandProcessor
 from models import PokerNet, CFRNetwork
+import sys
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('deep_cfr.log'),
-        logging.StreamHandler()
+        logging.FileHandler('deep_cfr.log', encoding='utf-8'),
+        logging.StreamHandler(stream=sys.stdout)  # Add explicit stdout
     ]
 )
 logger = logging.getLogger(__name__)
@@ -173,7 +173,7 @@ class DeepCFR:
                     immediate_regret[a] = -cf_value * strategy[a]
             
             logger.debug(f"Immediate Regret: {np.round(immediate_regret, 2)}")
-            logger.debug(f"Cumulative Regret Update: {np.round(self.cumulative_regrets[state_key], 2)} → {np.round(self.cumulative_regrets[state_key] + immediate_regret, 2)}")
+            logger.debug(f"Cumulative Regret Update: {np.round(self.cumulative_regrets[state_key], 2)} -> {np.round(self.cumulative_regrets[state_key] + immediate_regret, 2)}")
             
             self.cumulative_regrets[state_key] += immediate_regret
             self.cumulative_regrets[state_key] = np.maximum(self.cumulative_regrets[state_key], 0)

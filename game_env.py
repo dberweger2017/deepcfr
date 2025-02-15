@@ -16,7 +16,7 @@ class PokerEnv:
         self.history = []
         
         # Card conversion maps
-        self.suit_map = {0: "♠", 1: "♥", 2: "♦", 3: "♣"}
+        self.suit_map = {0: "S", 1: "H", 2: "D", 3: "C"}
         self.rank_map = {
             0: "2", 1: "3", 2: "4", 3: "5", 4: "6", 5: "7",
             6: "8", 7: "9", 8: "T", 9: "J", 10: "Q", 11: "K", 12: "A"
