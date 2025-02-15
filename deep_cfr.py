@@ -249,34 +249,25 @@ class DeepCFR:
             logger.info(f"Starting training for {iterations} iterations")
             for _ in range(iterations):
                 self.iterations += 1
-                self._cfr_iteration()
+                self._cfr_iteration()  # Only run game simulation
                 
-                # Update networks
-                loss_adv = self._update_networks(batch_size)
-                loss_strat = self._update_strategy_net(batch_size)
+                # Disable all network updates
+                # loss_adv = self._update_networks(batch_size)
+                # loss_strat = self._update_strategy_net(batch_size)
+                # if self.iterations % 100 == 0:
+                #     self.opponent_net.update_target(tau=0.01)
                 
-                # Update opponent network
-                if self.iterations % 100 == 0:
-                    self.opponent_net.update_target(tau=0.01)
-                    logger.debug("Updated opponent network")
-                
-                # Decay exploration
+                # Keep epsilon decay for demonstration
                 self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
-                
-                # Logging
-                self.writer.add_scalar('Loss/Advantage', loss_adv, self.iterations)
-                self.writer.add_scalar('Loss/Strategy', loss_strat, self.iterations)
-                self.writer.add_scalar('Params/Epsilon', self.epsilon, self.iterations)
                 
                 if self.iterations % save_interval == 0:
                     self._save_checkpoint()
-                    logger.info(f"Saved checkpoint at iteration {self.iterations}")
             
             self.writer.close()
-            logger.info("Training completed successfully")
+            logger.info("Simulation completed")
 
         except Exception as e:
-            logger.error(f"Training failed: {str(e)}", exc_info=True)
+            logger.error(f"Simulation failed: {str(e)}", exc_info=True)
             raise
 
     def _save_checkpoint(self):
@@ -292,13 +283,14 @@ class DeepCFR:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--log', type=str, default='INFO', 
+    parser.add_argument('--log', type=str, default='DEBUG',
                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'])
     args = parser.parse_args()
     logger.setLevel(args.log)
     
     try:
         trainer = DeepCFR()
-        trainer.train(iterations=1, batch_size=512, save_interval=1000)
+        # Run single iteration with no network updates
+        trainer.train(iterations=1, batch_size=1, save_interval=1)
     except Exception as e:
-        logger.critical(f"Critical error in main execution: {str(e)}", exc_info=True)
+        logger.critical(f"Critical error: {str(e)}", exc_info=True)

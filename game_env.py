@@ -1,6 +1,10 @@
+# game_env.py
+import logging
 from pettingzoo.classic import texas_holdem_no_limit_v6
 from deuces import Evaluator, Card
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 class PokerEnv:
     def __init__(self):
@@ -71,6 +75,7 @@ class PokerEnv:
             }
         return observations
 
+    # In PokerEnv class
     def _log_game_state(self, agent, action):
         """Detailed game state logging"""
         obs = self.env.env.last()[0]['observation']
@@ -86,17 +91,17 @@ class PokerEnv:
             3: "Raise Full Pot", 4: "All-In"
         }
         
-        print(f"\n{'='*40}")
-        print(f"Game State (Round {self.current_round+1} - {round_names[self.current_round]})")
-        print(f"Agent: {agent}")
-        print(f"Player 0 Chips: {obs['observation'][52]:.1f}")
-        print(f"Player 1 Chips: {obs['observation'][53]:.1f}")
-        print(f"Total Pot: {self.pot_size:.1f}")
-        print(f"Community Cards: {community or 'None'}")
-        print(f"Player Cards: {hole_cards}")
-        print(f"Action Taken: {action_names.get(action, 'Unknown')} ({action})")
-        print(f"Action Mask: {self.env.env.last()[0]['action_mask']}")
-        print(f"{'='*40}\n")
+        logger.debug(f"\n{'='*40}")
+        logger.debug(f"Game State (Round {self.current_round+1} - {round_names[self.current_round]})")
+        logger.debug(f"Agent: {agent}")
+        logger.debug(f"Player 0 Chips: {obs['observation'][52]:.1f}")
+        logger.debug(f"Player 1 Chips: {obs['observation'][53]:.1f}")
+        logger.debug(f"Total Pot: {self.pot_size:.1f}")
+        logger.debug(f"Community Cards: {community or 'None'}")
+        logger.debug(f"Player Cards: {hole_cards}")
+        logger.debug(f"Action Taken: {action_names.get(action, 'Unknown')} ({action})")
+        logger.debug(f"Action Mask: {self.env.env.last()[0]['action_mask']}")
+        logger.debug(f"{'='*40}\n")
 
     def step(self, action):
         self.env.step(action)
