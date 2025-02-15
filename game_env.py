@@ -16,7 +16,7 @@ class PokerEnv:
         self.history = []
         
         # Card conversion maps
-        self.suit_map = {0: "S", 1: "H", 2: "D", 3: "C"}
+        self.suit_map = {0: "c", 1: "d", 2: "h", 3: "s"}  # ASCII-friendly symbols
         self.rank_map = {
             0: "2", 1: "3", 2: "4", 3: "5", 4: "6", 5: "7",
             6: "8", 7: "9", 8: "T", 9: "J", 10: "Q", 11: "K", 12: "A"
@@ -127,19 +127,34 @@ class HandProcessor:
     
     def convert_card(self, idx):
         """Convert 1-based index to deuces Card object"""
-        if idx == 0: return None
-        rank = (idx - 1) // 4
-        suit = (idx - 1) % 4
-        return Card.new(rank * 4 + suit)
+        if idx == 0: 
+            return None
+        
+        # Card indices to string mapping
+        ranks = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
+        suits = ['c', 'd', 'h', 's']  # Clubs, Diamonds, Hearts, Spades
+        
+        rank_idx = (idx - 1) // 4
+        suit_idx = (idx - 1) % 4
+        
+        try:
+            return Card.new(ranks[rank_idx] + suits[suit_idx])
+        except IndexError:
+            logger.error(f"Invalid card index: {idx}")
+            return None
     
     def get_strength(self, hole_indices, board_indices):
         try:
             # Ensure inputs are numpy arrays
-            hole = [self.convert_card(int(i)) for i in np.array(hole_indices).flatten() if i > 0]
-            board = [self.convert_card(int(i)) for i in np.array(board_indices).flatten() if i > 0]
+            hole = [self.convert_card(i) for i in hole_indices if i > 0]
+            board = [self.convert_card(i) for i in board_indices if i > 0]
             
-            logger.debug(f"Hole indices: {hole_indices} -> {hole}")
-            logger.debug(f"Board indices: {board_indices} -> {board}")
+            logger.debug(f"Hole cards: {hole}")
+            logger.debug(f"Board cards: {board}")
+
+            if None in hole or None in board:
+                logger.error("Invalid cards detected")
+                return 0.0
             
             if len(hole) != 2:
                 logger.error(f"Invalid hole cards: {hole}")
@@ -152,6 +167,7 @@ class HandProcessor:
             strength = 1 - self.evaluator.get_five_card_rank_percentage(score)
             logger.debug(f"Hand strength: {strength:.4f}")
             return strength
+        
         except Exception as e:
-            logger.error(f"Hand eval failed: {str(e)}", exc_info=True)
+            logger.error(f"Hand evaluation failed: {str(e)}")
             return 0.0
