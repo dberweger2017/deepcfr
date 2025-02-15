@@ -19,10 +19,10 @@ class DeepCFR:
         self.advantage_net = CFRNetwork(self.device)
         self.strategy_net = CFRNetwork(self.device)
         
-        # Opponent network uses a rolling update from strategy_net.
+        # Opponent network uses rolling updates from strategy_net.
         self.opponent_net = CFRNetwork(self.device)
         
-        # Training parameters
+        # Training parameters.
         self.epsilon = 0.15
         self.epsilon_decay = 0.995
         self.min_epsilon = 0.01
@@ -31,14 +31,14 @@ class DeepCFR:
         # Advantage memory stores immediate regrets.
         self.advantage_memory = deque(maxlen=1000000)
         self.cumulative_regrets = defaultdict(lambda: np.zeros(5))
-        # Store cumulative strategy as a dict mapping state_key to a dict with raw_state and cumulative probabilities.
+        # cumulative_strategy maps state_key to dict with raw_state and cumulative probabilities.
         self.cumulative_strategy = {}
         
         # Define the training agent (assumed first agent).
         self.training_agent = self.env.agents[0]
         
-        # Logging
-        self.writer = SummaryWriter()  # Default logdir "runs"
+        # Logging.
+        self.writer = SummaryWriter()  # Logs saved in "runs"
         self.save_dir = "checkpoints"
         os.makedirs(self.save_dir, exist_ok=True)
 
@@ -49,28 +49,30 @@ class DeepCFR:
           - observation[0:2] are hole cards,
           - observation[2:7] are board cards,
           - observation[52] is the pot size.
+        IMPORTANT: Confirm these indices match your PokerEnv.
+        Also, test with synthetic data to ensure hand strength/pot size uniquely identify states,
+        minimizing hash collisions.
         """
         hole = observation[0:2]
         board = observation[2:7]
         hand_strength = self.hand_processor.get_strength(hole, board)
-        pot_size = observation[52]  # Adjust if your env's structure is different.
+        pot_size = observation[52]  # Adjust if necessary.
         key_str = f"{hand_strength:.2f}_{pot_size:.1f}"
         return hash(key_str)
 
     def encode_state_raw(self, observation):
-        """Convert the raw observation into a tensor for network input."""
+        """Converts the raw observation into a tensor for network input."""
         return torch.FloatTensor(observation).to(self.device)
 
     def get_action_probs(self, net, state_tensor, legal_mask):
-        logits, _ = net.net(state_tensor.unsqueeze(0))
+        logits = net.net(state_tensor.unsqueeze(0))
         probs = F.softmax(logits, dim=-1).detach().squeeze().cpu().numpy()
         probs = probs * legal_mask + 1e-8
         return probs / probs.sum()
 
     def _cfr_iteration(self):
         self.env.reset()
-        # We'll record history as tuples:
-        # (state, strategy, action, reach_prob_self, reach_prob_opponent)
+        # Record history as tuples: (state, strategy, action, rp_self, rp_opp)
         history = []
         rp_self = 1.0
         rp_opp = 1.0
@@ -83,18 +85,14 @@ class DeepCFR:
                 state = self.encode_state_raw(obs['observation'])
                 legal_mask = obs['action_mask']
                 if agent == self.training_agent:
-                    # Use epsilon-greedy for the training agent.
                     if random.random() < self.epsilon:
                         strategy = legal_mask / legal_mask.sum()
                     else:
                         strategy = self.get_action_probs(self.strategy_net, state, legal_mask)
                     action = np.random.choice(5, p=strategy)
-                    # Record current reach probabilities.
                     history.append((state, strategy, action, rp_self, rp_opp))
-                    # Update self reach probability.
                     rp_self *= strategy[action]
                 else:
-                    # Opponent: use rolling opponent network if available.
                     if self.opponent_net is not None:
                         strategy = self.get_action_probs(self.opponent_net, state, legal_mask)
                     else:
@@ -107,18 +105,16 @@ class DeepCFR:
 
     def _update_regrets(self, history, final_rewards):
         for state, strategy, action, rp_self, rp_opp in history:
-            # Use the abstracted state key based on raw observation.
+            # Use the abstracted state key.
             state_key = self.encode_state(state.cpu().numpy())
             final_reward = final_rewards[self.training_agent]
             # Proper CFV: scale final reward by opponent reach over self reach.
             cf_value = final_reward * rp_opp / (rp_self + 1e-8)
-            immediate_regret = cf_value * (np.eye(5)[action] - strategy)
-            # Store immediate regret for advantage training.
+            # Clip negative regrets: only positive regrets are used.
+            immediate_regret = np.maximum(cf_value * (np.eye(5)[action] - strategy), 0)
             self.advantage_memory.append((state.cpu().numpy(), immediate_regret))
-            # Update cumulative regrets.
             self.cumulative_regrets[state_key] += immediate_regret
             self.cumulative_regrets[state_key] = np.maximum(self.cumulative_regrets[state_key], 0)
-            # Update cumulative strategy: store raw state and add current strategy.
             if state_key not in self.cumulative_strategy:
                 self.cumulative_strategy[state_key] = {
                     'raw_state': state.cpu().numpy(),
@@ -133,7 +129,7 @@ class DeepCFR:
         states = torch.FloatTensor(np.array(states)).to(self.device)
         regrets = torch.FloatTensor(np.array(regrets)).to(self.device)
         self.advantage_net.optimizer.zero_grad()
-        policy_out, _ = self.advantage_net.net(states)
+        policy_out = self.advantage_net.net(states)
         loss = F.mse_loss(policy_out, regrets)
         loss.backward()
         self.advantage_net.optimizer.step()
@@ -156,7 +152,7 @@ class DeepCFR:
         states_batch = torch.stack(state_tensors)
         targets_batch = torch.FloatTensor(np.array(targets)).to(self.device)
         self.strategy_net.optimizer.zero_grad()
-        logits, _ = self.strategy_net.net(states_batch)
+        logits = self.strategy_net.net(states_batch)
         probs = F.softmax(logits, dim=-1)
         loss = F.kl_div(torch.log(probs + 1e-8), targets_batch, reduction='batchmean')
         loss.backward()
@@ -235,14 +231,13 @@ class DeepCFR:
             
             if self.iterations % save_interval == 0:
                 self._save_checkpoint()
-                # Log network histograms.
                 for net_name, net in zip(['AdvantageNet', 'StrategyNet'], [self.advantage_net.net, self.strategy_net.net]):
                     for name, param in net.named_parameters():
                         self.writer.add_histogram(f'{net_name}/{name}', param, self.iterations)
                         if param.grad is not None:
                             self.writer.add_histogram(f'{net_name}/{name}_grad', param.grad, self.iterations)
             
-            # Rolling update of opponent network (tracks strategy_net)
+            # Rolling update of the opponent network (tracks strategy_net)
             if self.iterations % 100 == 0:
                 self.opponent_net.update_target(tau=0.001)
 

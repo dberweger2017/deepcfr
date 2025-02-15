@@ -11,23 +11,23 @@ class PokerNet(nn.Module):
             nn.LayerNorm(512),
             nn.LeakyReLU(0.2),
             nn.Dropout(0.3),
-            nn.Linear(512, 256),
+            nn.Linear(input_dim=512, out_features=256),
             nn.LayerNorm(256),
             nn.LeakyReLU(0.2),
             nn.Dropout(0.2)
         )
         self.policy_head = nn.Linear(256, output_dim)
-        self.value_head = nn.Linear(256, 1)
-        
+        # Note: The value_head was removed as recommended.
+
     def forward(self, x):
         x = self.base(x)
-        return self.policy_head(x), self.value_head(x)
+        return self.policy_head(x)
 
 class CFRNetwork:
     def __init__(self, device):
         self.net = PokerNet().to(device)
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=1e-4)
-        self.target_net = copy.deepcopy(self.net)  # For rolling average opponent updates
+        self.target_net = copy.deepcopy(self.net)  # For rolling opponent updates
 
     def update_target(self, tau=0.001):
         # Soft update: target_net = tau * net + (1 - tau) * target_net
