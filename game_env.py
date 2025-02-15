@@ -105,3 +105,27 @@ class PokerEnv:
 
     def close(self):
         self.env.close()
+
+class HandProcessor:
+    def __init__(self):
+        self.evaluator = Evaluator()
+    
+    def convert_card(self, idx):
+        """Convert 1-based index to deuces Card object"""
+        if idx == 0: return None
+        rank = (idx - 1) // 4
+        suit = (idx - 1) % 4
+        return Card.new(rank * 4 + suit)
+    
+    def get_strength(self, hole_indices, board_indices):
+        try:
+            hole = [self.convert_card(i) for i in hole_indices if i > 0]
+            board = [self.convert_card(i) for i in board_indices if i > 0]
+            
+            if len(hole) != 2 or len(board) < 3:
+                return 0.0
+                
+            score = self.evaluator.evaluate(board, hole)
+            return 1 - self.evaluator.get_five_card_rank_percentage(score)
+        except:
+            return 0.0

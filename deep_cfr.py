@@ -299,6 +299,6 @@ if __name__ == "__main__":
     
     try:
         trainer = DeepCFR()
-        trainer.train(iterations=10000, batch_size=512, save_interval=1000)
+        trainer.train(iterations=1, batch_size=512, save_interval=1000)
     except Exception as e:
         logger.critical(f"Critical error in main execution: {str(e)}", exc_info=True)
