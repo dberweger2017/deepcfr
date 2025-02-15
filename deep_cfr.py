@@ -113,15 +113,15 @@ class DeepCFR:
 
             self.env.env.step(action if not done else None)
         
-        final_rewards = self.env.env.rewards
+        final_rewards = {agent: self.env.env.rewards.get(agent, 0) for agent in self.env.agents}
         print(f"\nFinal rewards: {final_rewards}")
         self._update_regrets(history, final_rewards)
 
     def _update_regrets(self, history, final_rewards):
-        player_reward = final_rewards[self.training_agent]
+        player_reward = final_rewards.get(self.training_agent, 0)
         
         for state_tensor, strategy, action, rp_self, rp_opp in history:
-            state_key = self.encode_state(state_tensor.cpu().numpy())
+            state_key = tuple(state_tensor.cpu().numpy().round(2))
             cf_value = player_reward * (rp_opp / (rp_self + 1e-8))
             
             # Calculate immediate regret
