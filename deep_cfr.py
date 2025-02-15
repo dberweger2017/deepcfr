@@ -48,7 +48,7 @@ class DeepCFR:
 
     def get_action_probs(self, net, state, legal_mask):
         logits, _ = net.net(state.unsqueeze(0))
-        probs = F.softmax(logits, dim=-1).squeeze().cpu().numpy()
+        probs = F.softmax(logits, dim=-1).detach().squeeze().cpu().numpy()
         probs = probs * legal_mask + 1e-8
         return probs / probs.sum()
 
@@ -113,7 +113,7 @@ class DeepCFR:
             self.env.env.step(action if not obs['done'] else None)
         
         # Process final rewards and update regrets only for the training agent.
-        final_rewards = {agent: self.env.env.rewards[agent] for agent in self.env.agents}
+        final_rewards = {agent: self.env.env.rewards.get(agent, 0) for agent in self.env.agents}
         self._update_regrets(history, final_rewards)
 
     def _update_regrets(self, history, final_rewards):
