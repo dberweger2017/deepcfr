@@ -69,19 +69,31 @@ class DeepCFR:
         self.env.reset()
         history = []
         rp_self, rp_opp = 1.0, 1.0
+        print("\nStarting new CFR iteration...")
         
         for agent in self.env.env.agent_iter():
-            # Properly unpack the tuple from last()
-            obs_dict, reward, termination, truncation, _ = self.env.env.last()
+            # Unpack with debug prints
+            last_output = self.env.env.last()
+            print(f"\nAgent: {agent} | Last output type: {type(last_output)}")
+            print(f"Last output length: {len(last_output)}")
+            
+            obs_dict, reward, termination, truncation, _ = last_output
             done = termination or truncation
+            
+            print(f"Observation dict keys: {obs_dict.keys()}")
+            print(f"Observation shape: {obs_dict['observation'].shape}")
+            print(f"Action mask: {obs_dict['action_mask']}")
+            print(f"Done status: {done}")
             
             if done:
                 action = None
             else:
-                # Access observation components correctly
                 obs = obs_dict['observation']
                 legal_mask = obs_dict['action_mask']
                 state_tensor = self.encode_state_raw(obs)
+                
+                print(f"State tensor: {state_tensor}")
+                print(f"Legal mask: {legal_mask}")
                 
                 if agent == self.training_agent:
                     if random.random() < self.epsilon:
@@ -97,9 +109,12 @@ class DeepCFR:
                     action = np.random.choice(len(strategy), p=strategy)
                     rp_opp *= strategy[action]
 
+                print(f"Chosen action: {action} | Strategy: {strategy}")
+
             self.env.env.step(action if not done else None)
         
         final_rewards = self.env.env.rewards
+        print(f"\nFinal rewards: {final_rewards}")
         self._update_regrets(history, final_rewards)
 
     def _update_regrets(self, history, final_rewards):
