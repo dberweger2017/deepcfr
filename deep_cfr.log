@@ -1,0 +1,35 @@
+2025-02-16 00:27:44,528 - INFO - Using device: cpu
+2025-02-16 00:27:45,804 - INFO - Starting training for 1 iterations
+2025-02-16 00:27:45,804 - INFO - 
+#################### Starting CFR Iteration 1 ####################
+2025-02-16 00:27:45,804 - ERROR - Hand eval failed: invalid index to scalar variable.
+2025-02-16 00:27:45,805 - DEBUG - Agent player_0 State Features:
+2025-02-16 00:27:45,805 - DEBUG - Hand Strength: 0.00
+2025-02-16 00:27:45,805 - DEBUG - Pot Size: 3.0
+2025-02-16 00:27:45,805 - DEBUG - Legal Actions: [0 1 3 4]
+2025-02-16 00:27:45,806 - DEBUG - Network strategy: [0.22 0.3  0.   0.2  0.28]
+2025-02-16 00:27:45,806 - INFO - Agent player_0 chose action 0 with probability 22.39%
+2025-02-16 00:27:45,807 - DEBUG - Agent player_0 - Game finished
+2025-02-16 00:27:45,807 - DEBUG - Agent player_1 - Game finished
+2025-02-16 00:27:45,807 - DEBUG - Raw rewards from env: {}
+2025-02-16 00:27:45,807 - DEBUG - Training agent: player_0
+2025-02-16 00:27:45,807 - INFO - 
+Final Results:
+2025-02-16 00:27:45,807 - INFO - Player 0 Reward: 0
+2025-02-16 00:27:45,807 - INFO - Player 1 Reward: 0
+2025-02-16 00:27:45,807 - INFO - Final Pot Size: 3.0
+2025-02-16 00:27:45,807 - INFO - Community Cards: []
+2025-02-16 00:27:45,809 - INFO - #######################################################
+
+2025-02-16 00:27:45,809 - INFO - Updating regrets with 1 decisions
+2025-02-16 00:27:45,809 - DEBUG - CF Value components - Reward: 0, rp_opp: 1.0, rp_self: 1.0
+2025-02-16 00:27:45,809 - DEBUG - 
+Decision 1:
+2025-02-16 00:27:45,809 - DEBUG - State: Hand Strength 0.0, Pot Size 3.0
+2025-02-16 00:27:45,809 - DEBUG - Strategy: [0.22 0.3  0.   0.2  0.28]
+2025-02-16 00:27:45,810 - DEBUG - Action: 0 (Prob: 22.39%)
+2025-02-16 00:27:45,810 - DEBUG - CF Value: 0.00
+2025-02-16 00:27:45,810 - DEBUG - Immediate Regret: [ 0. -0. -0. -0. -0.]
+2025-02-16 00:27:45,810 - DEBUG - Cumulative Regret Update: [0. 0. 0. 0. 0.] -> [0. 0. 0. 0. 0.]
+2025-02-16 00:27:45,810 - DEBUG - Updated cumulative strategy for state (0.0, 3.0)
+2025-02-16 00:27:45,812 - INFO - Simulation completed

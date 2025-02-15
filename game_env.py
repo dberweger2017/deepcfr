@@ -43,21 +43,28 @@ class PokerEnv:
         return [self._convert_card(i+1) for i in np.where(hole_mask == 1)[0]]
 
     def _get_community_cards(self, observation):
-        board_mask = observation[52:52+52*5]
-        logger.debug(f"Board mask: {np.where(board_mask == 1)[0]}")
-        new_cards = [self._convert_card(i+1) for i in np.where(board_mask == 1)[0]]
+        try:
+            # Board cards are in indices 52-311 (5*52=260 cards)
+            board_mask = observation[52:52+52*5]
+            active_indices = np.where(board_mask == 1)[0]
+            logger.debug(f"Board mask indices: {active_indices}")
+            
+            new_cards = [self._convert_card(i+1) for i in active_indices]
         
-        # Detect new community cards
-        if len(new_cards) > len(self.community_cards):
-            self.community_cards = new_cards
-            if len(new_cards) == 3:
-                self.current_round = 1  # Flop
-            elif len(new_cards) == 4:
-                self.current_round = 2  # Turn
-            elif len(new_cards) == 5:
-                self.current_round = 3  # River
+            # Detect new community cards
+            if len(new_cards) > len(self.community_cards):
+                self.community_cards = new_cards
+                if len(new_cards) == 3:
+                    self.current_round = 1  # Flop
+                elif len(new_cards) == 4:
+                    self.current_round = 2  # Turn
+                elif len(new_cards) == 5:
+                    self.current_round = 3  # River
 
-        return self.community_cards
+            return self.community_cards
+        except Exception as e:
+            logger.error(f"Community card error: {str(e)}")
+            return []
 
     def _get_obs(self):
         observations = {}
@@ -106,6 +113,9 @@ class PokerEnv:
     def step(self, action):
         self.env.step(action)
         self._log_game_state(self.env.env.agent_selection, action)
+        
+        # Log rewards after each step
+        logger.debug(f"Current rewards: {self.env.env.rewards}")
         return self._get_obs()
 
     def close(self):
@@ -124,19 +134,24 @@ class HandProcessor:
     
     def get_strength(self, hole_indices, board_indices):
         try:
-            hole = [self.convert_card(i) for i in hole_indices if i > 0]
-            board = [self.convert_card(i) for i in board_indices if i > 0]
+            # Ensure inputs are numpy arrays
+            hole = [self.convert_card(int(i)) for i in np.array(hole_indices).flatten() if i > 0]
+            board = [self.convert_card(int(i)) for i in np.array(board_indices).flatten() if i > 0]
+            
+            logger.debug(f"Hole indices: {hole_indices} -> {hole}")
+            logger.debug(f"Board indices: {board_indices} -> {board}")
             
             if len(hole) != 2:
-                logger.error(f"Invalid hole cards: {hole_indices}->{hole}")
+                logger.error(f"Invalid hole cards: {hole}")
                 return 0.0
             if len(board) < 3:
                 logger.warning(f"Partial board: {len(board)} cards")
                 return 0.0
                 
             score = self.evaluator.evaluate(board, hole)
-            logger.debug(f"Hand Evaluation: {hole} + {board} = {score}")
-            return 1 - self.evaluator.get_five_card_rank_percentage(score)
+            strength = 1 - self.evaluator.get_five_card_rank_percentage(score)
+            logger.debug(f"Hand strength: {strength:.4f}")
+            return strength
         except Exception as e:
-            logger.error(f"Hand eval failed: {str(e)}")
+            logger.error(f"Hand eval failed: {str(e)}", exc_info=True)
             return 0.0

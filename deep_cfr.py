@@ -156,9 +156,10 @@ class DeepCFR:
 
     def _update_regrets(self, history, final_rewards):
         player_reward = final_rewards.get(self.training_agent, 0)
-        logger.info(f"Updating regrets with {len(history)} decisions")
+        logger.debug(f"Final reward for {self.training_agent}: {player_reward}")
         
         for idx, (state_tensor, strategy, action, rp_self, rp_opp) in enumerate(history):
+            logger.debug(f"Reach probabilities - Self: {rp_self:.4f}, Opp: {rp_opp:.4f}")
             state_key = tuple(state_tensor.cpu().numpy().round(2))
             cf_value = player_reward * (rp_opp / (rp_self + 1e-8))
             logger.debug(f"CF Value components - Reward: {player_reward}, rp_opp: {rp_opp}, rp_self: {rp_self}")
