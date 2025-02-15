@@ -71,17 +71,17 @@ class DeepCFR:
         rp_self, rp_opp = 1.0, 1.0
         
         for agent in self.env.env.agent_iter():
-            obs_dict, _, _, _ = self.env.env.last()
-            obs = obs_dict['observation'] if agent == self.training_agent else obs_dict['observation']
-            legal_mask = obs_dict['action_mask']
+            obs_data = self.env.env.last()
+            obs = obs_data.observation
+            legal_mask = obs_data.action_mask
+            done = obs_data.termination or obs_data.truncation
             
-            if obs_dict['done']:
+            if done:
                 action = None
             else:
                 state_tensor = self.encode_state_raw(obs)
                 
                 if agent == self.training_agent:
-                    # Epsilon-greedy exploration
                     if random.random() < self.epsilon:
                         strategy = legal_mask / legal_mask.sum()
                     else:
@@ -91,15 +91,13 @@ class DeepCFR:
                     history.append((state_tensor, strategy, action, rp_self, rp_opp))
                     rp_self *= strategy[action]
                 else:
-                    # Use opponent net for other players
                     strategy = self.get_action_probs(self.opponent_net, state_tensor, legal_mask)
                     action = np.random.choice(len(strategy), p=strategy)
                     rp_opp *= strategy[action]
 
-            self.env.env.step(action if not obs_dict['done'] else None)
+            self.env.env.step(action if not done else None)
         
-        # Update with final payoffs
-        final_rewards = {agent: self.env.env.rewards[agent] for agent in self.env.agents}
+        final_rewards = self.env.env.rewards
         self._update_regrets(history, final_rewards)
 
     def _update_regrets(self, history, final_rewards):

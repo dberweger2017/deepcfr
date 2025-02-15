@@ -6,9 +6,11 @@ class PokerEnv:
     def __init__(self):
         self.env = texas_holdem_no_limit_v6.env()
         self.agents = self.env.possible_agents
-    
+        self.dones = {agent: False for agent in self.agents}
+
     def reset(self):
         self.env.reset()
+        self.dones = {agent: False for agent in self.agents}
         return self._get_obs()
     
     def step(self, action):
@@ -18,11 +20,12 @@ class PokerEnv:
     def _get_obs(self):
         observations = {}
         for agent in self.agents:
-            obs = self.env.observe(agent)
+            obs, reward, termination, truncation, _ = self.env.last()
+            self.dones[agent] = termination or truncation
             observations[agent] = {
                 'observation': obs['observation'],
                 'action_mask': np.array(obs['action_mask'], dtype=np.float32),
-                'done': self.env.dones[agent]
+                'done': self.dones[agent]
             }
         return observations
     
@@ -46,9 +49,9 @@ class HandProcessor:
             board = [self.convert_card(i) for i in board_indices if i > 0]
             
             if len(hole) != 2 or len(board) < 3:
-                return 0.0  # Invalid state
+                return 0.0
                 
             score = self.evaluator.evaluate(board, hole)
             return 1 - self.evaluator.get_five_card_rank_percentage(score)
         except:
-            return 0.0  # Fallback for invalid evaluations
+            return 0.0
