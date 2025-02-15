@@ -9,6 +9,19 @@ from torch.utils.tensorboard import SummaryWriter
 from game_env import PokerEnv, HandProcessor
 from models import PokerNet, CFRNetwork
 
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('deep_cfr.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
 class DeepCFR:
     def __init__(self):
         self.env = PokerEnv()
