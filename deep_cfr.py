@@ -51,19 +51,20 @@ class DeepCFR:
         os.makedirs(self.save_dir, exist_ok=True)
 
     def encode_state(self, observation):
-        """Convert observation to (hand_strength, pot_size) tuple"""
+        """Add round information and stack sizes"""
         try:
-            # Extract card information
-            hole_mask = observation[:52]
-            hole_indices = np.where(hole_mask == 1)[0] + 1
-            
-            # Community cards (flop + turn + river)
-            board_mask = observation[52:52+52*5]
-            board_indices = np.where(board_mask == 1)[0] + 1
+            hole_indices = np.where(observation[:52] == 1)[0] + 1
+            board_indices = np.where(observation[52:52+52*5] == 1)[0] + 1
             
             hand_strength = self.hand_processor.get_strength(hole_indices, board_indices)
-            pot_size = observation[52] + observation[53]  # Total chips in pot
-            return (round(hand_strength, 2), round(pot_size, 1))
+            pot_size = observation[52] + observation[53]
+            stack_ratio = observation[54] / (observation[54] + observation[55] + 1e-8)  # Player's stack ratio
+            round_progress = len(board_indices) / 5  # 0-1 based on community cards
+            
+            return (round(hand_strength, 2), 
+                    round(pot_size, 1),
+                    round(stack_ratio, 2),
+                    round(round_progress, 2))
         except Exception as e:
             logger.error(f"Error encoding state: {str(e)}")
             raise
@@ -101,6 +102,7 @@ class DeepCFR:
         self.env.reset()
         history = []
         rp_self, rp_opp = 1.0, 1.0
+        final_rewards = {agent: 0 for agent in self.env.agents}  # Initialize rewards dict
         logger.info(f"\n{'#'*20} Starting CFR Iteration {self.iterations} {'#'*20}")
 
         for agent in self.env.env.agent_iter():
@@ -108,6 +110,11 @@ class DeepCFR:
             obs_dict, reward, termination, truncation, _ = last_output
             done = termination or truncation
             
+            # Capture reward when agent reaches terminal state
+            if done:
+                final_rewards[agent] += reward
+                logger.debug(f"Agent {agent} received terminal reward: {reward}")
+
             if done:
                 action = None
                 logger.debug(f"Agent {agent} - Game finished")
@@ -141,7 +148,7 @@ class DeepCFR:
 
             self.env.env.step(action if not done else None)
 
-        final_rewards = {agent: self.env.env.rewards.get(agent, 0) for agent in self.env.agents}
+        # Log final results with properly captured rewards
         logger.debug(f"Raw rewards from env: {self.env.env.rewards}")
         logger.debug(f"Training agent: {self.training_agent}")
         logger.info(f"\nFinal Results:")
@@ -152,6 +159,7 @@ class DeepCFR:
         logger.info(f"{'#'*55}\n")
         
         self._update_regrets(history, final_rewards)
+        return final_rewards
 
 
     def _update_regrets(self, history, final_rewards):
@@ -180,7 +188,6 @@ class DeepCFR:
             logger.debug(f"Cumulative Regret Update: {np.round(self.cumulative_regrets[state_key], 2)} -> {np.round(self.cumulative_regrets[state_key] + immediate_regret, 2)}")
             
             self.cumulative_regrets[state_key] += immediate_regret
-            self.cumulative_regrets[state_key] = np.maximum(self.cumulative_regrets[state_key], 0)
             
             self.advantage_memory.append((state_tensor.cpu().numpy(), self.cumulative_regrets[state_key]))
             
