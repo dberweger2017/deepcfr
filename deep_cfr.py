@@ -98,79 +98,91 @@ class DeepCFR:
             raise
 
     def _cfr_iteration(self):
-        try:
-            self.env.reset()
-            history = []
-            rp_self, rp_opp = 1.0, 1.0
-            logger.debug(f"\nStarting CFR iteration {self.iterations}")
+        self.env.reset()
+        history = []
+        rp_self, rp_opp = 1.0, 1.0
+        logger.info(f"\n{'#'*20} Starting CFR Iteration {self.iterations} {'#'*20}")
 
-            for agent in self.env.env.agent_iter():
-                last_output = self.env.env.last()
-                obs_dict, reward, termination, truncation, _ = last_output
-                done = termination or truncation
+        for agent in self.env.env.agent_iter():
+            last_output = self.env.env.last()
+            obs_dict, reward, termination, truncation, _ = last_output
+            done = termination or truncation
+            
+            if done:
+                action = None
+                logger.debug(f"Agent {agent} - Game finished")
+            else:
+                obs = obs_dict['observation']
+                legal_mask = obs_dict['action_mask']
+                state_tensor = self.encode_state_raw(obs)
                 
-                if done:
-                    action = None
-                else:
-                    obs = obs_dict['observation']
-                    legal_mask = obs_dict['action_mask']
-                    state_tensor = self.encode_state_raw(obs)
-                    
-                    logger.debug(f"Agent: {agent} | Legal mask: {legal_mask}")
-                    logger.debug(f"State tensor: {state_tensor.cpu().numpy()}")
+                logger.debug(f"Agent {agent} State Features:")
+                logger.debug(f"Hand Strength: {state_tensor[0].item():.2f}")
+                logger.debug(f"Pot Size: {state_tensor[1].item():.1f}")
+                logger.debug(f"Legal Actions: {np.where(legal_mask)[0]}")
 
-                    if agent == self.training_agent:
-                        if random.random() < self.epsilon:
-                            strategy = legal_mask / legal_mask.sum()
-                        else:
-                            strategy = self.get_action_probs(self.strategy_net, state_tensor, legal_mask)
-                        
-                        action = np.random.choice(len(strategy), p=strategy)
-                        history.append((state_tensor, strategy, action, rp_self, rp_opp))
-                        rp_self *= strategy[action]
-                        logger.debug(f"Training agent action: {action} | Strategy: {strategy}")
+                if agent == self.training_agent:
+                    if random.random() < self.epsilon:
+                        strategy = legal_mask / legal_mask.sum()
+                        logger.debug("Using random exploration strategy")
                     else:
-                        strategy = self.get_action_probs(self.opponent_net, state_tensor, legal_mask)
-                        action = np.random.choice(len(strategy), p=strategy)
-                        rp_opp *= strategy[action]
-                        logger.debug(f"Opponent action: {action} | Strategy: {strategy}")
+                        strategy = self.get_action_probs(self.strategy_net, state_tensor, legal_mask)
+                        logger.debug(f"Network strategy: {np.round(strategy, 2)}")
+                    
+                    action = np.random.choice(len(strategy), p=strategy)
+                    history.append((state_tensor, strategy, action, rp_self, rp_opp))
+                    rp_self *= strategy[action]
+                else:
+                    strategy = self.get_action_probs(self.opponent_net, state_tensor, legal_mask)
+                    action = np.random.choice(len(strategy), p=strategy)
+                    rp_opp *= strategy[action]
 
-                self.env.env.step(action if not done else None)
+                logger.info(f"Agent {agent} chose action {action} with probability {strategy[action]:.2%}")
 
-            final_rewards = {agent: self.env.env.rewards.get(agent, 0) for agent in self.env.agents}
-            logger.debug(f"Final rewards: {final_rewards}")
-            self._update_regrets(history, final_rewards)
+            self.env.env.step(action if not done else None)
 
-        except Exception as e:
-            logger.error(f"Error in CFR iteration: {str(e)}", exc_info=True)
-            raise
+        final_rewards = {agent: self.env.env.rewards.get(agent, 0) for agent in self.env.agents}
+        logger.info(f"\nFinal Results:")
+        logger.info(f"Player 0 Reward: {final_rewards['player_0']}")
+        logger.info(f"Player 1 Reward: {final_rewards['player_1']}")
+        logger.info(f"Final Pot Size: {self.env.pot_size}")
+        logger.info(f"Community Cards: {self.env.community_cards}")
+        logger.info(f"{'#'*55}\n")
+        
+        self._update_regrets(history, final_rewards)
+
 
     def _update_regrets(self, history, final_rewards):
-        try:
-            player_reward = final_rewards.get(self.training_agent, 0)
-            logger.info(f"Updating regrets with {len(history)} history entries")
-
-            for state_tensor, strategy, action, rp_self, rp_opp in history:
-                state_key = tuple(state_tensor.cpu().numpy().round(2))
-                cf_value = player_reward * (rp_opp / (rp_self + 1e-8))
-                
-                immediate_regret = np.zeros(5)
-                immediate_regret[action] = cf_value * (1 - strategy[action])
-                for a in range(5):
-                    if a != action:
-                        immediate_regret[a] = -cf_value * strategy[a]
-                
-                self.cumulative_regrets[state_key] += immediate_regret
-                self.cumulative_regrets[state_key] = np.maximum(self.cumulative_regrets[state_key], 0)
-                
-                self.advantage_memory.append((state_tensor.cpu().numpy(), self.cumulative_regrets[state_key]))
-                
-                self.cumulative_strategy[state_key]['counts'] += strategy * rp_self
-                self.cumulative_strategy[state_key]['visits'] += 1
-
-        except Exception as e:
-            logger.error(f"Error updating regrets: {str(e)}", exc_info=True)
-            raise
+        player_reward = final_rewards.get(self.training_agent, 0)
+        logger.info(f"Updating regrets with {len(history)} decisions")
+        
+        for idx, (state_tensor, strategy, action, rp_self, rp_opp) in enumerate(history):
+            state_key = tuple(state_tensor.cpu().numpy().round(2))
+            cf_value = player_reward * (rp_opp / (rp_self + 1e-8))
+            
+            logger.debug(f"\nDecision {idx+1}:")
+            logger.debug(f"State: Hand Strength {state_key[0]}, Pot Size {state_key[1]}")
+            logger.debug(f"Strategy: {np.round(strategy, 2)}")
+            logger.debug(f"Action: {action} (Prob: {strategy[action]:.2%})")
+            logger.debug(f"CF Value: {cf_value:.2f}")
+            
+            immediate_regret = np.zeros(5)
+            immediate_regret[action] = cf_value * (1 - strategy[action])
+            for a in range(5):
+                if a != action:
+                    immediate_regret[a] = -cf_value * strategy[a]
+            
+            logger.debug(f"Immediate Regret: {np.round(immediate_regret, 2)}")
+            logger.debug(f"Cumulative Regret Update: {np.round(self.cumulative_regrets[state_key], 2)} → {np.round(self.cumulative_regrets[state_key] + immediate_regret, 2)}")
+            
+            self.cumulative_regrets[state_key] += immediate_regret
+            self.cumulative_regrets[state_key] = np.maximum(self.cumulative_regrets[state_key], 0)
+            
+            self.advantage_memory.append((state_tensor.cpu().numpy(), self.cumulative_regrets[state_key]))
+            
+            self.cumulative_strategy[state_key]['counts'] += strategy * rp_self
+            self.cumulative_strategy[state_key]['visits'] += 1
+            logger.debug(f"Updated cumulative strategy for state {state_key}")
 
     def _update_networks(self, batch_size):
         try:
