@@ -21,11 +21,11 @@ class PokerEnv:
         observations = {}
         for agent in self.agents:
             obs, reward, termination, truncation, _ = self.env.last()
-            self.dones[agent] = termination or truncation
+            done = termination or truncation
             observations[agent] = {
                 'observation': obs['observation'],
                 'action_mask': np.array(obs['action_mask'], dtype=np.float32),
-                'done': self.dones[agent]
+                'done': done
             }
         return observations
     
