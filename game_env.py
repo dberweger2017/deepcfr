@@ -20,11 +20,12 @@ class PokerEnv:
     def _get_obs(self):
         observations = {}
         for agent in self.agents:
-            obs, reward, termination, truncation, _ = self.env.last()
+            # Unpack the tuple correctly
+            obs_dict, reward, termination, truncation, _ = self.env.last()
             done = termination or truncation
             observations[agent] = {
-                'observation': obs['observation'],
-                'action_mask': np.array(obs['action_mask'], dtype=np.float32),
+                'observation': obs_dict['observation'],
+                'action_mask': np.array(obs_dict['action_mask'], dtype=np.float32),
                 'done': done
             }
         return observations

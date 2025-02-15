@@ -71,14 +71,16 @@ class DeepCFR:
         rp_self, rp_opp = 1.0, 1.0
         
         for agent in self.env.env.agent_iter():
-            obs_data = self.env.env.last()
-            obs = obs_data.observation
-            legal_mask = obs_data.action_mask
-            done = obs_data.termination or obs_data.truncation
+            # Properly unpack the tuple from last()
+            obs_dict, reward, termination, truncation, _ = self.env.env.last()
+            done = termination or truncation
             
             if done:
                 action = None
             else:
+                # Access observation components correctly
+                obs = obs_dict['observation']
+                legal_mask = obs_dict['action_mask']
                 state_tensor = self.encode_state_raw(obs)
                 
                 if agent == self.training_agent:
