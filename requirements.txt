@@ -1,0 +1,4 @@
+open_spiel
+deuces
+torch
+numpy
