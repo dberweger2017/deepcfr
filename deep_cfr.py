@@ -51,20 +51,22 @@ class DeepCFR:
         os.makedirs(self.save_dir, exist_ok=True)
 
     def encode_state(self, observation):
-        """Add round information and stack sizes"""
+        """Convert observation to (hand_strength, pot_size) tuple"""
         try:
-            hole_indices = np.where(observation[:52] == 1)[0] + 1
-            board_indices = np.where(observation[52:52+52*5] == 1)[0] + 1
+            # Extract card information - indices 0-51 are player cards
+            hole_mask = observation[:52]
+            hole_indices = np.where(hole_mask == 1)[0] + 1  # +1 to convert to 1-based indexing
+            
+            # Community cards - indices 52-311 (52*5=260 cards)
+            board_mask = observation[52:52+260]
+            board_indices = np.where(board_mask == 1)[0] + 1
             
             hand_strength = self.hand_processor.get_strength(hole_indices, board_indices)
-            pot_size = observation[52] + observation[53]
-            stack_ratio = observation[54] / (observation[54] + observation[55] + 1e-8)  # Player's stack ratio
-            round_progress = len(board_indices) / 5  # 0-1 based on community cards
             
-            return (round(hand_strength, 2), 
-                    round(pot_size, 1),
-                    round(stack_ratio, 2),
-                    round(round_progress, 2))
+            # Pot size is at index 312 (not 52/53 as previously thought)
+            pot_size = observation[312]
+            
+            return (round(hand_strength, 2), round(pot_size, 1))
         except Exception as e:
             logger.error(f"Error encoding state: {str(e)}")
             raise
@@ -100,6 +102,8 @@ class DeepCFR:
 
     def _cfr_iteration(self):
         self.env.reset()
+        obs_shape = self.env._get_obs()['player_0']['observation'].shape
+        logger.info(f"Observation shape: {obs_shape}")
         history = []
         rp_self, rp_opp = 1.0, 1.0
         final_rewards = {agent: 0 for agent in self.env.agents}  # Initialize rewards dict

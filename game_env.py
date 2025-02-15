@@ -82,7 +82,6 @@ class PokerEnv:
             }
         return observations
 
-    # In PokerEnv class
     def _log_game_state(self, agent, action):
         """Detailed game state logging"""
         obs = self.env.env.last()[0]['observation']
