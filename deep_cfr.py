@@ -243,4 +243,4 @@ class DeepCFR:
 
 if __name__ == "__main__":
     trainer = DeepCFR()
-    trainer.train(iterations=10000, batch_size=512, save_interval=500)
+    trainer.train(iterations=1_000_000_000, batch_size=1024, save_interval=100_000)
