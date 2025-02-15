@@ -39,7 +39,7 @@ class DeepCFR:
         self.training_agent = self.env.agents[0]
         
         # Logging
-        self.writer = SummaryWriter()
+        self.writer = SummaryWriter()  # default logdir="runs"
         self.save_dir = "checkpoints"
         os.makedirs(self.save_dir, exist_ok=True)
 
@@ -60,6 +60,16 @@ class DeepCFR:
             if len(self.advantage_memory) >= batch_size:
                 loss = self._update_networks(batch_size)
                 self.writer.add_scalar('Loss/Advantage', loss, self.iterations)
+                # Also log a histogram of the regrets in this batch.
+                self.writer.add_histogram('Batch/Regrets', torch.tensor([r for _, r in random.sample(self.advantage_memory, min(128, len(self.advantage_memory)))], dtype=torch.float32), self.iterations)
+            
+            # Log epsilon and memory buffer size
+            self.writer.add_scalar('Metrics/Epsilon', self.epsilon, self.iterations)
+            self.writer.add_scalar('Metrics/MemorySize', len(self.advantage_memory), self.iterations)
+            
+            # Log learning rates from the advantage net optimizer
+            for i, param_group in enumerate(self.advantage_net.optimizer.param_groups):
+                self.writer.add_scalar(f'LearningRate/Advantage/group_{i}', param_group['lr'], self.iterations)
             
             self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
             
@@ -70,6 +80,12 @@ class DeepCFR:
             
             if self.iterations % save_interval == 0:
                 self._save_checkpoint()
+                # Log histograms for network parameters and gradients for both networks
+                for net_name, net in zip(['AdvantageNet', 'StrategyNet'], [self.advantage_net.net, self.strategy_net.net]):
+                    for name, param in net.named_parameters():
+                        self.writer.add_histogram(f'{net_name}/{name}', param, self.iterations)
+                        if param.grad is not None:
+                            self.writer.add_histogram(f'{net_name}/{name}_grad', param.grad, self.iterations)
             
             # Every 100k iterations, load the saved checkpoint as the opponent
             if self.iterations % 100000 == 0:
