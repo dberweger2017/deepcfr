@@ -142,6 +142,8 @@ class DeepCFR:
             self.env.env.step(action if not done else None)
 
         final_rewards = {agent: self.env.env.rewards.get(agent, 0) for agent in self.env.agents}
+        logger.debug(f"Raw rewards from env: {self.env.env.rewards}")
+        logger.debug(f"Training agent: {self.training_agent}")
         logger.info(f"\nFinal Results:")
         logger.info(f"Player 0 Reward: {final_rewards['player_0']}")
         logger.info(f"Player 1 Reward: {final_rewards['player_1']}")
@@ -159,6 +161,7 @@ class DeepCFR:
         for idx, (state_tensor, strategy, action, rp_self, rp_opp) in enumerate(history):
             state_key = tuple(state_tensor.cpu().numpy().round(2))
             cf_value = player_reward * (rp_opp / (rp_self + 1e-8))
+            logger.debug(f"CF Value components - Reward: {player_reward}, rp_opp: {rp_opp}, rp_self: {rp_self}")
             
             logger.debug(f"\nDecision {idx+1}:")
             logger.debug(f"State: Hand Strength {state_key[0]}, Pot Size {state_key[1]}")

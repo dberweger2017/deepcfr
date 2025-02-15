@@ -43,8 +43,8 @@ class PokerEnv:
         return [self._convert_card(i+1) for i in np.where(hole_mask == 1)[0]]
 
     def _get_community_cards(self, observation):
-        """Extract community cards from observation vector"""
         board_mask = observation[52:52+52*5]
+        logger.debug(f"Board mask: {np.where(board_mask == 1)[0]}")
         new_cards = [self._convert_card(i+1) for i in np.where(board_mask == 1)[0]]
         
         # Detect new community cards
@@ -127,10 +127,16 @@ class HandProcessor:
             hole = [self.convert_card(i) for i in hole_indices if i > 0]
             board = [self.convert_card(i) for i in board_indices if i > 0]
             
-            if len(hole) != 2 or len(board) < 3:
+            if len(hole) != 2:
+                logger.error(f"Invalid hole cards: {hole_indices}->{hole}")
+                return 0.0
+            if len(board) < 3:
+                logger.warning(f"Partial board: {len(board)} cards")
                 return 0.0
                 
             score = self.evaluator.evaluate(board, hole)
+            logger.debug(f"Hand Evaluation: {hole} + {board} = {score}")
             return 1 - self.evaluator.get_five_card_rank_percentage(score)
-        except:
+        except Exception as e:
+            logger.error(f"Hand eval failed: {str(e)}")
             return 0.0
