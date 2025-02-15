@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import numpy as np
 import random
 import os
+import copy
 from collections import defaultdict, deque
 from torch.utils.tensorboard import SummaryWriter
 from game_env import PokerEnv, HandProcessor
@@ -14,9 +15,14 @@ class DeepCFR:
         self.hand_processor = HandProcessor()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
-        # Initialize networks
+        # Initialize networks for training.
+        # The advantage network is updated via regret matching,
+        # while the strategy network is used for selecting actions.
         self.advantage_net = CFRNetwork(self.device)
         self.strategy_net = CFRNetwork(self.device)
+        
+        # Opponent network (frozen opponent), initially not set (random opponent)
+        self.opponent_net = None
         
         # Training parameters
         self.epsilon = 0.15
@@ -24,11 +30,13 @@ class DeepCFR:
         self.min_epsilon = 0.01
         self.iterations = 0
         
-        # Memory buffers
+        # Memory buffers for regret training
         self.advantage_memory = deque(maxlen=1000000)
-        self.strategy_memory = deque(maxlen=1000000)
         self.cumulative_regrets = defaultdict(lambda: np.zeros(5))
         self.cumulative_strategy = defaultdict(lambda: np.zeros(5))
+        
+        # Define which agent is training (assume first agent in the environment)
+        self.training_agent = self.env.agents[0]
         
         # Logging
         self.writer = SummaryWriter()
@@ -63,11 +71,18 @@ class DeepCFR:
             if self.iterations % save_interval == 0:
                 self._save_checkpoint()
 
+            # Update opponent model every 10,000 iterations.
+            # This freezes the current strategy_net as the opponent.
+            if self.iterations % 10000 == 0:
+                self.opponent_net = copy.deepcopy(self.strategy_net)
+                print(f"Opponent model updated at iteration {self.iterations}")
+
     def _cfr_iteration(self):
         self.env.reset()
-        history = {agent: [] for agent in self.env.agents}
-        current_reach = {agent: 1.0 for agent in self.env.agents}
+        # We'll record history only for the training agent.
+        history = []  # list of tuples: (state, probs, action)
         
+        # Loop through agents in the environment.
         for agent in self.env.env.agent_iter():
             obs_dict, rewards = self.env._get_observations()
             obs = obs_dict[agent]
@@ -77,40 +92,44 @@ class DeepCFR:
             else:
                 state = self.encode_state(obs['observation'])
                 legal_mask = obs['action_mask']
-                state_key = tuple(state.cpu().numpy().tolist())
                 
-                if random.random() < self.epsilon:
-                    probs = legal_mask / legal_mask.sum()
+                if agent == self.training_agent:
+                    # Training agent: use epsilon-greedy with current strategy_net.
+                    if random.random() < self.epsilon:
+                        probs = legal_mask / legal_mask.sum()
+                    else:
+                        probs = self.get_action_probs(self.strategy_net, state, legal_mask)
+                    action = np.random.choice(5, p=probs)
+                    history.append((state, probs, action))
                 else:
-                    probs = self.get_action_probs(self.strategy_net, state, legal_mask)
-                
-                action = np.random.choice(5, p=probs)
-                history[agent].append((state, probs, action))
-                
-                # Update reach probabilities
-                opponent = [a for a in self.env.agents if a != agent][0]
-                current_reach[opponent] *= probs[action]
+                    # Opponent agent: use the frozen opponent_net if available,
+                    # otherwise act randomly.
+                    if self.opponent_net is not None:
+                        probs = self.get_action_probs(self.opponent_net, state, legal_mask)
+                    else:
+                        probs = legal_mask / legal_mask.sum()
+                    action = np.random.choice(5, p=probs)
             
             self.env.env.step(action if not obs['done'] else None)
         
-        # Process final rewards
+        # Process final rewards and update regrets only for the training agent.
         final_rewards = {agent: self.env.env.rewards[agent] for agent in self.env.agents}
         self._update_regrets(history, final_rewards)
 
     def _update_regrets(self, history, final_rewards):
-        for agent in self.env.agents:
-            for state, strategy, action in history[agent]:
-                state_key = tuple(state.cpu().numpy().tolist())
-                cf_value = final_rewards[agent] - np.mean(list(final_rewards.values()))
-                
-                # Calculate regret
-                regret = cf_value * (np.eye(5)[action] - strategy)
-                self.cumulative_regrets[state_key] += regret
-                self.cumulative_regrets[state_key] = np.maximum(self.cumulative_regrets[state_key], 0)
-                
-                # Store experience
-                self.advantage_memory.append((state.cpu().numpy(), self.cumulative_regrets[state_key].copy()))
-                self.cumulative_strategy[state_key] += strategy
+        # Update regrets using experiences from the training agent.
+        for state, strategy, action in history:
+            state_key = tuple(state.cpu().numpy().tolist())
+            cf_value = final_rewards[self.training_agent] - np.mean(list(final_rewards.values()))
+            
+            # Compute regret: positive regret for not having taken each action.
+            regret = cf_value * (np.eye(5)[action] - strategy)
+            self.cumulative_regrets[state_key] += regret
+            self.cumulative_regrets[state_key] = np.maximum(self.cumulative_regrets[state_key], 0)
+            
+            # Save the experience for network training.
+            self.advantage_memory.append((state.cpu().numpy(), self.cumulative_regrets[state_key].copy()))
+            self.cumulative_strategy[state_key] += strategy
 
     def _update_networks(self, batch_size):
         batch = random.sample(self.advantage_memory, batch_size)
@@ -130,6 +149,8 @@ class DeepCFR:
     def validate(self, num_games=100):
         wins = 0
         self.strategy_net.net.eval()
+        if self.opponent_net is not None:
+            self.opponent_net.net.eval()
         
         for _ in range(num_games):
             self.env.reset()
@@ -142,12 +163,19 @@ class DeepCFR:
                 
                 with torch.no_grad():
                     state = self.encode_state(obs['observation'])
-                    probs = self.get_action_probs(self.strategy_net, state, obs['action_mask'])
+                    legal_mask = obs['action_mask']
+                    if agent == self.training_agent:
+                        probs = self.get_action_probs(self.strategy_net, state, legal_mask)
+                    else:
+                        if self.opponent_net is not None:
+                            probs = self.get_action_probs(self.opponent_net, state, legal_mask)
+                        else:
+                            probs = legal_mask / legal_mask.sum()
                     action = np.random.choice(5, p=probs)
                 
                 self.env.env.step(action)
             
-            wins += int(self.env.env.rewards['player_0'] > 0)
+            wins += int(self.env.env.rewards[self.training_agent] > 0)
         
         self.strategy_net.net.train()
         return wins / num_games
