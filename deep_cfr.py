@@ -52,7 +52,7 @@ class DeepCFR:
         probs = probs * legal_mask + 1e-8
         return probs / probs.sum()
 
-    def train(self, iterations=10000, batch_size=512, save_interval=500):
+    def train(self, iterations=100000, batch_size=512, save_interval=20000):
         for _ in range(iterations):
             self.iterations += 1
             self._cfr_iteration()
@@ -70,12 +70,15 @@ class DeepCFR:
             
             if self.iterations % save_interval == 0:
                 self._save_checkpoint()
-
-            # Update opponent model every 10,000 iterations.
-            # This freezes the current strategy_net as the opponent.
-            if self.iterations % 10000 == 0:
-                self.opponent_net = copy.deepcopy(self.strategy_net)
-                print(f"Opponent model updated at iteration {self.iterations}")
+            
+            # Every 100k iterations, load the saved checkpoint as the opponent
+            if self.iterations % 100000 == 0:
+                checkpoint_path = os.path.join(self.save_dir, f"checkpoint_{self.iterations}.pth")
+                checkpoint = torch.load(checkpoint_path)
+                self.opponent_net = CFRNetwork(self.device)
+                self.opponent_net.net.load_state_dict(checkpoint['strategy_net'])
+                self.opponent_net.optimizer.load_state_dict(checkpoint['optimizer_strat'])
+                print(f"Opponent model updated from checkpoint at iteration {self.iterations}")
 
     def _cfr_iteration(self):
         self.env.reset()
@@ -159,23 +162,23 @@ class DeepCFR:
                 obs = obs_dict[agent]
                 
                 if obs['done']:
-                    continue
-                
-                with torch.no_grad():
-                    state = self.encode_state(obs['observation'])
-                    legal_mask = obs['action_mask']
-                    if agent == self.training_agent:
-                        probs = self.get_action_probs(self.strategy_net, state, legal_mask)
-                    else:
-                        if self.opponent_net is not None:
-                            probs = self.get_action_probs(self.opponent_net, state, legal_mask)
+                    action = None
+                else:
+                    with torch.no_grad():
+                        state = self.encode_state(obs['observation'])
+                        legal_mask = obs['action_mask']
+                        if agent == self.training_agent:
+                            probs = self.get_action_probs(self.strategy_net, state, legal_mask)
                         else:
-                            probs = legal_mask / legal_mask.sum()
-                    action = np.random.choice(5, p=probs)
+                            if self.opponent_net is not None:
+                                probs = self.get_action_probs(self.opponent_net, state, legal_mask)
+                            else:
+                                probs = legal_mask / legal_mask.sum()
+                        action = np.random.choice(5, p=probs)
                 
                 self.env.env.step(action)
             
-            wins += int(self.env.env.rewards[self.training_agent] > 0)
+            wins += int(self.env.env.rewards.get(self.training_agent, 0) > 0)
         
         self.strategy_net.net.train()
         return wins / num_games
