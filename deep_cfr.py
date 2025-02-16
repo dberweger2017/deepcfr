@@ -66,9 +66,11 @@ class DeepCFR:
             board_indices = self.env.community_card_indices
             
             hand_strength = self.hand_processor.get_strength(hole_indices, board_indices)
-            pot_size = observation[52] + observation[53]
+            player_0_stack = observation[52]
+            player_1_stack = observation[53]
+            total_pot = 100 - (player_0_stack + player_1_stack)  # Assuming 100 chip starting
             
-            return (round(hand_strength, 2), round(pot_size, 1))
+            return (round(hand_strength, 2), round(total_pot, 1))
         except Exception as e:
             logger.error(f"Error encoding state: {str(e)}")
             raise
