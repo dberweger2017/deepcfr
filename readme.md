@@ -1,3 +1,6 @@
+Here's the full README with the updated formatting. Make sure to copy the entire content as-is into your README file:
+
+```markdown
 # Deep CFR Poker Project
 
 This project implements a Deep Counterfactual Regret (CFR) approach for training poker agents. It’s not overhyped—just a solid, experimental setup to explore deep learning for poker strategy.
@@ -43,10 +46,10 @@ flowchart TD
     A[Start Training Process] --> B[Reset Poker Environment]
     B --> C[Encode State using HandProcessor]
     C --> D[Obtain Features: Hand Strength, Pot Size, etc.]
-    D --> E[Forward Pass through PokerNet (via CFRNetwork)]
+    D --> E[Forward Pass through PokerNet via CFRNetwork]
     E --> F{Agent Type?}
-    F -- Training Agent --> G[Select Action (Epsilon-Greedy)]
-    F -- Opponent Agent --> H[Select Action (Network Policy)]
+    F -- Training Agent --> G[Select Action with Epsilon-Greedy]
+    F -- Opponent Agent --> H[Select Action using Network Policy]
     G --> I[CFR Iteration: Record State, Action, Reach Probabilities]
     H --> I
     I --> J[Compute Immediate Regrets (CFR Core)]
@@ -59,4 +62,33 @@ flowchart TD
     O --> P[Decay Epsilon & Checkpoint Models]
     P --> Q[Next Iteration]
     Q --> C
+```
+
+## Key Decisions
+
+- **Simplicity over Complexity**:  
+  The project uses a straightforward two-layer network architecture, which I think strikes a good balance between performance and interpretability.
+
+- **Separation of Concerns**:  
+  By splitting the environment, model definitions, and training logic into separate files, the code remains modular and easier to manage.
+
+- **Detailed Logging**:  
+  Extra logging is built into both the environment and the training process. This isn't just for debugging; it's essential for understanding learning dynamics in a complex domain like poker.
+
+- **Epsilon-Greedy Exploration**:  
+  The decision to decay epsilon ensures thorough exploration in the early stages of training, then gradually shifts towards exploitation as the models improve. I find this approach both practical and effective.
+
+## Running the Project
+
+Ensure you have the necessary dependencies installed (e.g., PyTorch, PettingZoo, and Deuces). Then, simply run:
+
+```bash
+python deep_cfr.py --log INFO
+```
+
+This command starts the training process. Adjust parameters like the number of iterations, batch size, or save interval as needed.
+
+## Final Thoughts
+
+I'm pretty happy with the decisions made here. The project isn't over-engineered; it's a focused exploration of deep learning applied to poker using CFR. If you're into game theory or want to see how deep learning can work with complex decision-making processes, give this project a try!
 ```
