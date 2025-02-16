@@ -1,6 +1,3 @@
-Here's the full README with the updated formatting. Make sure to copy the entire content as-is into your README file:
-
-```markdown
 # Deep CFR Poker Project
 
 This project implements a Deep Counterfactual Regret (CFR) approach for training poker agents. It’s not overhyped—just a solid, experimental setup to explore deep learning for poker strategy.
@@ -91,4 +88,3 @@ This command starts the training process. Adjust parameters like the number of i
 ## Final Thoughts
 
 I'm pretty happy with the decisions made here. The project isn't over-engineered; it's a focused exploration of deep learning applied to poker using CFR. If you're into game theory or want to see how deep learning can work with complex decision-making processes, give this project a try!
-```
