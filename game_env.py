@@ -41,43 +41,31 @@ class PokerEnv:
         return [self._convert_card(i+1) for i in np.where(hole_mask == 1)[0]]
 
     def _get_community_cards(self, observation):
-        """Track community card indices instead of strings"""
         try:
-            # Get all revealed cards (indices 0-51)
-            all_cards_mask = observation[:52]
-            all_indices = np.where(all_cards_mask == 1)[0] + 1  # Convert to 1-based
+            # Get community cards directly from RLCard state
+            game = self.env.env.env.game
+            public_cards = game.get_public_cards()
+            self.community_card_indices = [c.card_id + 1 for c in public_cards]  # Convert to 1-based
             
-            # Get player cards (first 2 revealed cards)
-            player_indices = sorted(all_indices[:2])
+            # Update current round
+            self.current_round = game.round_num
             
-            # Calculate community cards by removing player cards
-            new_community = [idx for idx in all_indices 
-                            if idx not in player_indices]
-            
-            # Detect new community cards
-            if len(new_community) > len(self.community_card_indices):
-                self.community_card_indices = new_community
-                if len(new_community) == 3:
-                    self.current_round = 1  # Flop
-                elif len(new_community) == 4:
-                    self.current_round = 2  # Turn
-                elif len(new_community) == 5:
-                    self.current_round = 3  # River
-
             return [self._convert_card(idx) for idx in self.community_card_indices]
         except Exception as e:
             logger.error(f"Community card error: {str(e)}")
             return []
 
+    # In PokerEnv's _get_obs method
     def _get_obs(self):
-        """Preserve original observation structure"""
         observations = {}
         for agent in self.agents:
             obs, reward, termination, truncation, _ = self.env.last()
             done = termination or truncation
             
-            # Track pot size using correct indices 52+53
-            self.pot_size = obs['observation'][52] + obs['observation'][53]
+            # CORRECTED: Pot size is tracked through game state, not chip counts
+            self.pot_size = self.env.env.env.game.get_pot_size()  # RLCard-specific method
+            # If above doesn't work, track manually:
+            # self.pot_size = sum(self.env.env.env.game.get_pot())
             
             observations[agent] = {
                 'observation': obs['observation'],
@@ -140,29 +128,34 @@ class HandProcessor:
     
     def get_strength(self, hole_indices, board_indices):
         try:
-            # Ensure inputs are numpy arrays
+            # Validate input indices
             hole = [self.convert_card(i) for i in hole_indices if i > 0]
             board = [self.convert_card(i) for i in board_indices if i > 0]
             
             logger.debug(f"Hole cards: {hole}")
             logger.debug(f"Board cards: {board}")
 
-            if None in hole or None in board:
-                logger.error("Invalid cards detected")
-                return 0.0
-            
-            if len(hole) != 2:
-                logger.error(f"Invalid hole cards: {hole}")
-                return 0.0
+            # Handle pre-flop state
             if len(board) < 3:
-                logger.warning(f"Partial board: {len(board)} cards")
-                return 0.0
+                return self._estimate_preflop_strength(hole)
                 
             score = self.evaluator.evaluate(board, hole)
-            strength = 1 - self.evaluator.get_five_card_rank_percentage(score)
-            logger.debug(f"Hand strength: {strength:.4f}")
-            return strength
-        
+            return 1 - self.evaluator.get_five_card_rank_percentage(score)
+            
         except Exception as e:
             logger.error(f"Hand evaluation failed: {str(e)}")
             return 0.0
+        
+    def _estimate_preflop_strength(self, hole):
+        """Basic pre-flop hand ranking estimation"""
+        ranks = sorted([Card.get_rank_int(c) for c in hole])
+        suited = Card.get_suit_int(hole[0]) == Card.get_suit_int(hole[1])
+        
+        # Simple pre-flop hand ranking logic
+        if ranks[0] == ranks[1]:
+            return 0.9  # Pair
+        elif ranks[1] - ranks[0] == 1:
+            return 0.7 if suited else 0.6  # Suited/unsuited connector
+        elif suited:
+            return 0.5  # Suited
+        return 0.4  # Unconnected/unsuited

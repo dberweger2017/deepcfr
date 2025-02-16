@@ -53,6 +53,11 @@ class DeepCFR:
     def encode_state(self, observation):
         """Use card indices for strength calculation"""
         try:
+            # Debug logging
+            logger.debug(f"Raw observation: {observation}")
+            logger.debug(f"Card mask sum: {sum(observation[:52])}")
+            logger.debug(f"Chip counts: {observation[52]} (p0), {observation[53]} (p1)")
+
             # Get player card indices (1-based)
             hole_mask = observation[:52]
             hole_indices = np.where(hole_mask == 1)[0] + 1
