@@ -51,18 +51,16 @@ class DeepCFR:
         os.makedirs(self.save_dir, exist_ok=True)
 
     def encode_state(self, observation):
-        """Convert observation to (hand_strength, pot_size) tuple"""
+        """Use card indices for strength calculation"""
         try:
-            # Extract card information from first 52 positions
+            # Get player card indices (1-based)
             hole_mask = observation[:52]
-            hole_indices = np.where(hole_mask == 1)[0] + 1  # Convert to 1-based indexing
+            hole_indices = np.where(hole_mask == 1)[0] + 1
             
-            # Community cards are tracked through game state
-            board_indices = [self.env.community_cards]  # Needs proper conversion
+            # Get community card indices from env
+            board_indices = self.env.community_card_indices
             
             hand_strength = self.hand_processor.get_strength(hole_indices, board_indices)
-            
-            # Get pot size from indices 52 and 53
             pot_size = observation[52] + observation[53]
             
             return (round(hand_strength, 2), round(pot_size, 1))

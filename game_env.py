@@ -11,16 +11,14 @@ class PokerEnv:
         self.env = texas_holdem_no_limit_v6.env()
         self.agents = self.env.possible_agents
         self.current_round = 0
-        self.community_cards = []
+        self.community_card_indices = []  # Track card indices instead of strings
         self.pot_size = 0
         self.history = []
         
-        # Card conversion maps (preserved)
+        # Keep existing conversion maps
         self.suit_map = {0: "c", 1: "d", 2: "h", 3: "s"}
-        self.rank_map = {
-            0: "2", 1: "3", 2: "4", 3: "5", 4: "6", 5: "7",
-            6: "8", 7: "9", 8: "T", 9: "J", 10: "Q", 11: "K", 12: "A"
-        }
+        self.rank_map = {0: "2", 1: "3", 2: "4", 3: "5", 4: "6", 5: "7",
+                        6: "8", 7: "9", 8: "T", 9: "J", 10: "Q", 11: "K", 12: "A"}
 
     def reset(self):
         self.env.reset()
@@ -43,22 +41,22 @@ class PokerEnv:
         return [self._convert_card(i+1) for i in np.where(hole_mask == 1)[0]]
 
     def _get_community_cards(self, observation):
-        """Track community cards with proper index handling"""
+        """Track community card indices instead of strings"""
         try:
-            # Get all revealed cards (player + community)
+            # Get all revealed cards (indices 0-51)
             all_cards_mask = observation[:52]
-            all_indices = np.where(all_cards_mask == 1)[0] + 1
+            all_indices = np.where(all_cards_mask == 1)[0] + 1  # Convert to 1-based
             
-            # Subtract known player cards
-            player_cards = self._get_player_cards(observation)
-            player_indices = [i for i,c in enumerate(all_cards_mask) if c == 1][:2]
+            # Get player cards (first 2 revealed cards)
+            player_indices = sorted(all_indices[:2])
             
-            new_community = [self._convert_card(i+1) for i in all_indices 
-                            if (i-1) not in player_indices]
+            # Calculate community cards by removing player cards
+            new_community = [idx for idx in all_indices 
+                            if idx not in player_indices]
             
             # Detect new community cards
-            if len(new_community) > len(self.community_cards):
-                self.community_cards = new_community
+            if len(new_community) > len(self.community_card_indices):
+                self.community_card_indices = new_community
                 if len(new_community) == 3:
                     self.current_round = 1  # Flop
                 elif len(new_community) == 4:
@@ -66,7 +64,7 @@ class PokerEnv:
                 elif len(new_community) == 5:
                     self.current_round = 3  # River
 
-            return self.community_cards
+            return [self._convert_card(idx) for idx in self.community_card_indices]
         except Exception as e:
             logger.error(f"Community card error: {str(e)}")
             return []
