@@ -38,6 +38,29 @@ Counterfactual Regret Minimization (CFR) is a technique used to compute approxim
 
 Below is a Mermaid diagram outlining the training process with an emphasis on the models and CFR components. Note that while GitHub now supports Mermaid (in beta), some Markdown renderers might not render it.
 
+```mermaid
+flowchart TD
+    A[Start Training Process] --> B[Reset Poker Environment]
+    B --> C[Encode State using HandProcessor]
+    C --> D[Obtain Features: Hand Strength, Pot Size, etc.]
+    D --> E[Forward Pass through PokerNet via CFRNetwork]
+    E --> F{Agent Type?}
+    F -- Training Agent --> G[Select Action with Epsilon-Greedy]
+    F -- Opponent Agent --> H[Select Action using Network Policy]
+    G --> I[CFR Iteration: Record Data]
+    H --> I
+    I --> J[Compute Immediate Regrets]
+    J --> K[Update Regrets & Strategy]
+    K --> L[Store in Advantage Memory]
+    L --> M[Update Advantage Network]
+    K --> N[Update Strategy Network]
+    M --> O[Soft Update Networks]
+    N --> O
+    O --> P[Decay Epsilon & Checkpoint]
+    P --> Q[Next Iteration]
+    Q --> C
+```
+
 ## Key Decisions
 
 - **Simplicity over Complexity**:  
