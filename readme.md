@@ -16,38 +16,47 @@ Counterfactual Regret Minimization (CFR) is a technique used to compute approxim
 ## Training Process
 
 1. **Simulation & State Encoding**:  
-   The environment is reset and each agent’s state is encoded. This involves converting raw observations into features like hand strength and pot size.
+   The environment is reset and each agent’s state is encoded using the `HandProcessor`. This step converts raw observations into features like hand strength and pot size.
 
 2. **Action Selection**:  
-   For the training agent, the system uses an epsilon-greedy approach: with probability `epsilon`, it explores randomly; otherwise, it follows the network's suggested strategy. The opponent uses its own network to pick actions.
+   - The **training agent** uses an epsilon-greedy approach: with probability `epsilon`, it explores randomly; otherwise, it follows the network's suggested strategy.
+   - The **opponent** selects actions based on its own network's policy.
 
 3. **Regret & Strategy Update**:  
-   After each iteration, the algorithm calculates counterfactual values and immediate regrets, updating cumulative regrets and strategies accordingly.
+   After each iteration, the algorithm calculates counterfactual values and immediate regrets. It updates the cumulative regrets and strategy counts accordingly.
 
 4. **Network Updates**:  
-   Although the current demo disables network updates, there are placeholders for training the advantage and strategy networks using MSE and KL-divergence losses respectively.
+   Although the current demo disables network updates, there are placeholders for training:
+   - The **Advantage Network** is updated using Mean Squared Error (MSE) loss.
+   - The **Strategy Network** is updated using Kullback-Leibler (KL) divergence loss.
+   - There is also a soft target update mechanism.
 
-5. **Checkpointing**:  
-   Models are periodically saved, ensuring you can resume training or analyze progress.
+5. **Checkpointing & Exploration Decay**:  
+   Models are periodically saved, and the epsilon value decays over time to shift from exploration to exploitation.
 
-## Key Decisions
+## Training Process Diagram
 
-- **Simplicity over Complexity**:  
-  The project uses a straightforward two-layer network architecture, which I believe strikes a good balance between performance and interpretability.
+Below is a Mermaid diagram outlining the training process with an emphasis on the models and CFR components. Note that while GitHub now supports Mermaid (in beta), some Markdown renderers might not render it.
 
-- **Separation of Concerns**:  
-  By splitting the environment, model definitions, and training logic into separate files, the code stays modular and easier to manage.
-
-- **Detailed Logging**:  
-  Extra logging is built into the environment and training process. This isn’t just for debugging—it’s essential for understanding the learning dynamics in a complex domain like poker.
-
-- **Epsilon-Greedy Exploration**:  
-  The decision to decay epsilon ensures exploration initially and gradual exploitation as training progresses. I think it’s a sensible choice given the uncertainties in poker.
-
-## Running the Project
-
-Make sure you have the necessary dependencies installed (e.g., PyTorch, PettingZoo, and Deuces). Then, simply run:
-
-```bash
-python deep_cfr.py --log INFO
+```mermaid
+flowchart TD
+    A[Start Training Process] --> B[Reset Poker Environment]
+    B --> C[Encode State using HandProcessor]
+    C --> D[Obtain Features: Hand Strength, Pot Size, etc.]
+    D --> E[Forward Pass through PokerNet (via CFRNetwork)]
+    E --> F{Agent Type?}
+    F -- Training Agent --> G[Select Action (Epsilon-Greedy)]
+    F -- Opponent Agent --> H[Select Action (Network Policy)]
+    G --> I[CFR Iteration: Record State, Action, Reach Probabilities]
+    H --> I
+    I --> J[Compute Immediate Regrets (CFR Core)]
+    J --> K[Update Cumulative Regrets & Strategy Counts]
+    K --> L[Store (State, Regrets) in Advantage Memory]
+    L --> M[Update Advantage Network (MSE Loss)]
+    K --> N[Update Strategy Network (KL Loss)]
+    M --> O[Soft Update Target Networks]
+    N --> O
+    O --> P[Decay Epsilon & Checkpoint Models]
+    P --> Q[Next Iteration]
+    Q --> C
 ```
