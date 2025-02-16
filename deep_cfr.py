@@ -53,18 +53,17 @@ class DeepCFR:
     def encode_state(self, observation):
         """Convert observation to (hand_strength, pot_size) tuple"""
         try:
-            # Extract card information - indices 0-51 are player cards
+            # Extract card information from first 52 positions
             hole_mask = observation[:52]
-            hole_indices = np.where(hole_mask == 1)[0] + 1  # +1 to convert to 1-based indexing
+            hole_indices = np.where(hole_mask == 1)[0] + 1  # Convert to 1-based indexing
             
-            # Community cards - indices 52-311 (52*5=260 cards)
-            board_mask = observation[52:52+260]
-            board_indices = np.where(board_mask == 1)[0] + 1
+            # Community cards are tracked through game state
+            board_indices = [self.env.community_cards]  # Needs proper conversion
             
             hand_strength = self.hand_processor.get_strength(hole_indices, board_indices)
             
-            # Pot size is at index 312 (not 52/53 as previously thought)
-            pot_size = observation[312]
+            # Get pot size from indices 52 and 53
+            pot_size = observation[52] + observation[53]
             
             return (round(hand_strength, 2), round(pot_size, 1))
         except Exception as e:
